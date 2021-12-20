@@ -30,25 +30,16 @@ import Tablebot.Plugin.Utils (intToText)
 -- the search query is a substring of any cards, then performing a fuzzy search on
 -- the cards given, or all of the cards if no cards are found
 queryCard :: NrApi -> Text -> Card
-queryCard NrApi {cards = cards} txt = findCard (substringSearch pairs txt) txt pairs
+queryCard NrApi {cards = cards} query =
+  case filter (isInfixOf (toLower query) . fst) pairs of
+    [] -> fuzzyQueryCard pairs query
+    [res] -> snd res
+    res -> fuzzyQueryCard res query
   where
     pairs = zip (map (toLower . fromMaybe "" . Card.title) cards) cards
-    substringSearch thePairs searchTxt = filter (\(x, _) -> isInfixOf (toLower searchTxt) x) thePairs
-
--- | @findCard finds a card from the given list of pairs that is some subset of a
--- full list. If the sublist is empty, it will fuzzy search the full list. If the sublist
--- has exactly 1 element, it'll return that element. If the sublist has multiple
--- elements, it will fuzzy search the sublist
-findCard :: [(Text, Card)] -> Text -> [(Text, Card)] -> Card
-findCard [] searchTxt fullPairs = fuzzyQueryCard fullPairs searchTxt
-findCard [(_, card)] _ _ = card
-findCard pairs searchTxt _ = fuzzyQueryCard pairs searchTxt
-
--- | @queryCard@ fuzzy searches the given library of cards by title.
-fuzzyQueryCard :: [(Text, Card)] -> Text -> Card
-fuzzyQueryCard pairs = closestValueWithCosts editCosts unpackedPairs . unpack
-  where
-    unpackedPairs = fmap (\(x, y) -> (unpack x, y)) pairs
+    fuzzyQueryCard pairs' =
+      let unpackedPairs = fmap (\(x, y) -> (unpack x, y)) pairs'
+       in closestValueWithCosts editCosts unpackedPairs . unpack
     editCosts =
       FuzzyCosts
         { deletion = 10,
